@@ -1,0 +1,56 @@
+[project]
+name = "do-problem-solving"
+description = "문제풀어"
+authors = [{ name = "Dowon", email = "ks2515@naver.com" }]
+dependencies = [
+    "diskcache>=5.6.3",
+    "httpx>=0.25.0",
+    "schedule>=1.2.1",
+    "click>=8.1.7",
+]
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "MIT" }
+dynamic = ["version"]
+
+[project.optional-dependencies]
+dev = ["black>=23.10.1", "ruff>=0.1.2", "pre-commit>=3.5.0"]
+
+[project.urls]
+repository = "https://github.com/Bing-su/do-problem-solving"
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.pdm.version]
+source = "file"
+path = "src/do_problem_solving/__version__.py"
+
+[tool.ruff]
+select = [
+    "A",
+    "B",
+    "C4",
+    "C90",
+    "E",
+    "EM",
+    "F",
+    "FA",
+    "FURB",
+    "I001",
+    "ISC",
+    "N",
+    "PERF",
+    "PIE",
+    "PT",
+    "PTH",
+    "RET",
+    "RUF",
+    "SIM",
+    "T20",
+    "UP",
+    "W",
+]
+ignore = ["B008", "B905", "E501"]
+unfixable = ["F401"]
