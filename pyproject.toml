@@ -2,7 +2,12 @@
 name = "do-problem-solving"
 description = "문제풀어"
 authors = [{ name = "Dowon", email = "ks2515@naver.com" }]
-dependencies = ["httpx>=0.25.0", "schedule>=1.2.1", "click>=8.1.7"]
+dependencies = [
+    "httpx>=0.25.0",
+    "schedule>=1.2.1",
+    "click>=8.1.7",
+    "pytz>=2023.3.post1",
+]
 requires-python = ">=3.11"
 readme = "README.md"
 license = { text = "MIT" }
@@ -13,6 +18,9 @@ dev = ["black>=23.10.1", "ruff>=0.1.3", "pre-commit>=3.5.0"]
 
 [project.urls]
 repository = "https://github.com/Bing-su/do-problem-solving"
+
+[project.scripts]
+dops = "do_problem_solving.__main__:cli"
 
 [build-system]
 requires = ["pdm-backend"]
