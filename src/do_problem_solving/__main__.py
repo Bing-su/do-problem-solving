@@ -1,20 +1,16 @@
 from __future__ import annotations
 
-import atexit
+import re
+import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from pathlib import Path
-from zoneinfo import ZoneInfo
 
-import diskcache as dc
+import click
 import httpx
+import schedule
 
 solved = "https://solved.ac/api/v3"
-nfty = "https://ntfy.sh"
-data_dir = Path(__file__).parent.joinpath("data")
-cache = dc.Cache(data_dir)
-atexit.register(cache.close)
-ko_kr = ZoneInfo("Asia/Seoul")
+nfty = "https://ntfy.sh/"
+last_solved: int | None = None
 
 
 @dataclass
@@ -24,24 +20,10 @@ class NotiInfo:
     url: str = nfty
 
 
-def str_to_datetime(s: str) -> datetime:
-    return datetime.strptime(s, "%Y-%m-%d %H:%M:%S")
-
-
-def datetime_to_str(dt: datetime) -> str:
-    return dt.strftime("%Y-%m-%d %H:%M:%S")
-
-
-def is_today(dt: datetime) -> bool:
-    today = datetime.now(ko_kr).replace(hour=6, minute=0, second=0, microsecond=0)
-    tomorrow = today + timedelta(days=1)
-    return today <= dt < tomorrow
-
-
 def get_solved_count(handle: str) -> int:
     params = {"handle": handle}
     headers = {"Accept": "application/json", "User-Agent": "do-problem-solving"}
-    resp = httpx.get(f"{solved}/users/show", params=params, headers=headers)
+    resp = httpx.get(f"{solved}/user/show", params=params, headers=headers)
     resp.raise_for_status()
 
     # https://solvedac.github.io/unofficial-documentation/#/operations/getUser
@@ -53,40 +35,67 @@ def get_solved_count(handle: str) -> int:
     return data["solvedCount"]
 
 
-def update(handle: str, count: int) -> None:
-    now = datetime.now(ko_kr)
-    cache[handle] = {"time": datetime_to_str(now), "count": count}
-
-
 def notify(info: NotiInfo) -> None:
+    base_url = httpx.URL(info.url)
+    url = base_url.join(info.topic)
     title = "Problem Solving"
     message = "문제풀어!"
-    payload = {
-        "title": title,
-        "message": message,
-    }
-    resp = httpx.post(info.url, json=payload, follow_redirects=True)
+    headers = {"Title": title}
+    resp = httpx.post(url, data=message, headers=headers, follow_redirects=True)
     resp.raise_for_status()
 
 
 def loop(info: NotiInfo) -> None:
+    global last_solved
+
     handle = info.handle
-    current_count = get_solved_count(handle)
-    if handle not in cache:
+    current_solved = get_solved_count(handle)
+    if last_solved is None or last_solved >= current_solved:
         notify(info)
+        last_solved = current_solved
+
+
+def on_six(info: NotiInfo) -> None:
+    global last_solved
+
+    last_solved = get_solved_count(info.handle)
+
+
+def main(info: NotiInfo, times: list[str]) -> None:
+    schedule.every().day.at("06:00:10", tz="Asia/Seoul").do(on_six, info)
+    for t in times:
+        schedule.every().day.at(t, tz="Asia/Seoul").do(loop, info)
+
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
+
+
+def is_valid_time(time: str) -> bool:
+    return bool(re.match(r"^\d{2}:\d{2}(:\d{2})?$", time))
+
+
+@click.command()
+@click.argument("handle")
+@click.option("-p", "--topic", required=True, help="ntfy topic")
+@click.option(
+    "-t", "--times", multiple=True, default=["09:00", "21:00"], show_default=True
+)
+@click.option("--url", default=nfty, show_default=True)
+@click.option("-i", "--imediate", is_flag=True, help="run immediately")
+def cli(handle: str, topic: str, times: list[str], url: str, imediate: bool) -> None:
+    info = NotiInfo(handle=handle, topic=topic, url=url)
+
+    if imediate:
+        loop(info)
         return
 
-    cache_data = cache[handle]
-    last_time_str = cache_data["time"]
-    last_time = str_to_datetime(last_time_str)
+    valid_times = [t for t in times if is_valid_time(t)]
+    if not valid_times:
+        msg = f"invalid times: {times:!r}"
+        raise ValueError(msg)
+    main(info, valid_times)
 
-    if not is_today(last_time):
-        notify(info)
-        update(handle, current_count)
-        return
 
-    if current_count > cache_data["count"]:
-        update(handle, current_count)
-        return
-
-    notify(info)
+if __name__ == "__main__":
+    cli()
